@@ -13,7 +13,7 @@ Provide complete English and Simplified Chinese README documents with consistent
 ## Non-goals
 
 - Do not change CLI behavior.
-- Do not alter the active SoccerBot adoption work.
+- Do not change the generic adoption workflow.
 
 ## Dependencies
 
@@ -50,4 +50,4 @@ Provide complete English and Simplified Chinese README documents with consistent
 
 ## Next action
 
-Continue the SoccerBot adoption pilot under W-002.
+Keep both README quick starts aligned with the released CLI.

@@ -54,4 +54,4 @@ Provide a portable `project-plan-orchestrator` Skill that initializes or adopts 
 
 ## Next action
 
-Pilot adoption in SoccerBot under W-002, then validate the workflow in fresh Codex and Claude sessions.
+Maintain the reusable workflow through linked work items and verification evidence.

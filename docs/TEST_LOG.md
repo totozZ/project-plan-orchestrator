@@ -4,6 +4,16 @@ Append one record for every delivery work unit. Allowed results: `Passed`, `Fail
 
 <!-- project-plan-orchestrator:tests:start -->
 <!-- Append new test records above the end marker. -->
+## TR-20260703-003
+
+- Date: 2026-07-03
+- Environment: Windows, Python 3.14.5
+- Revision: Uncommitted project-specific content cleanup
+- Procedure: Search tracked content for the removed project and work-item references; compile both CLI copies; run `python -m unittest discover -s tests -v`; run `python .project-plan/planctl.py check --root .`.
+- Result: Passed
+- Evidence: No removed project or work-item references remained; both CLI copies compiled; 16/16 automated tests passed; the repository guard passed with the generic adoption reference detected as the delivery change.
+- Links: W-004
+
 ## TR-20260703-002
 
 - Date: 2026-07-03
@@ -19,9 +29,9 @@ Append one record for every delivery work unit. Allowed results: `Passed`, `Fail
 - Date: 2026-07-03
 - Environment: Windows, Python 3.14.5, Git 2.54.0
 - Revision: Initial uncommitted repository working tree
-- Procedure: Run `python -m unittest discover -s tests -v`; validate the Skill with `quick_validate.py`; compile both CLI copies with `py_compile`; run the vendored plan guard; run a read-only SoccerBot adoption preview.
+- Procedure: Run `python -m unittest discover -s tests -v`; validate the Skill with `quick_validate.py`; compile both CLI copies with `py_compile`; run the vendored plan guard.
 - Result: Passed
-- Evidence: 16/16 unit and integration tests passed; Skill validation passed; both CLI copies compiled; the repository guard passed; the SoccerBot preview returned only the active root/docs planning candidates and made no changes.
-- Links: W-001, W-002
+- Evidence: 16/16 unit and integration tests passed; Skill validation passed; both CLI copies compiled; the repository guard passed.
+- Links: W-001
 
 <!-- project-plan-orchestrator:tests:end -->

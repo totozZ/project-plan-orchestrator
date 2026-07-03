@@ -19,5 +19,3 @@ When a project already has separate implementation, documentation-sync, and plan
 - Map their behavior into the orchestrator workflow.
 - Forward-test equivalent initialization, implementation, bug, and evidence flows.
 - Retire the older skills only after the unified guard and workflow cover their active responsibilities.
-
-For SoccerBot, retain the existing root `PLAN.md` and detailed design documents in place, add dedicated bug and test records, then phase out `plan-sync`, `design-doc-sync`, and `impl-phase` after parity is demonstrated.
