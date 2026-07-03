@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Plan Orchestrator"
+  short_description: "Drive prioritized work with verified project records"
+  default_prompt: "Use $project-plan-orchestrator to continue the highest-priority ready work item and synchronize its implementation, bug, and test records."

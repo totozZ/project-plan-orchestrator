@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "plan_path": "PLAN.md",
+  "work_globs": [
+    "docs/work/W-*.md"
+  ],
+  "bug_log_path": "docs/BUGS.md",
+  "test_log_path": "docs/TEST_LOG.md",
+  "delivery_globs": [
+    "skills/**",
+    "tests/**",
+    ".github/**"
+  ],
+  "exempt_globs": [
+    ".git/**",
+    ".project-plan/**",
+    "docs/**",
+    "PLAN.md",
+    "README.md",
+    "LICENSE",
+    "plan-orchestrator.json",
+    "**/__pycache__/**"
+  ],
+  "instruction_targets": [
+    "AGENTS.md",
+    "CLAUDE.md"
+  ]
+}
