@@ -37,6 +37,7 @@ class SkillStructureTests(unittest.TestCase):
             "assets/templates/work-item.md",
             "assets/templates/BUGS.md",
             "assets/templates/TEST_LOG.md",
+            "assets/templates/DECISIONS.md",
             "assets/templates/plan-orchestrator.json",
             "assets/templates/AGENTS.fragment.md",
             "assets/templates/CLAUDE.fragment.md",

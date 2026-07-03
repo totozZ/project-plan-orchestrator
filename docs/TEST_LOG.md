@@ -4,6 +4,16 @@ Append one record for every delivery work unit. Allowed results: `Passed`, `Fail
 
 <!-- project-plan-orchestrator:tests:start -->
 <!-- Append new test records above the end marker. -->
+## TR-20260703-004
+
+- Date: 2026-07-03
+- Environment: Windows, Python 3.14.5
+- Revision: Uncommitted strictness, decisions, and generated-files update
+- Procedure: Compile both planctl copies; run `python -m unittest discover -s tests -v`; run both source and vendored project-plan guards.
+- Result: Passed
+- Evidence: Both planctl copies compiled; 23/23 automated tests passed; both guard commands passed and displayed `Strictness: normal`.
+- Links: W-005
+
 ## TR-20260703-003
 
 - Date: 2026-07-03

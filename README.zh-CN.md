@@ -49,9 +49,25 @@ python .project-plan/planctl.py check --root .
 - `docs/work/W-###-slug.md`：边界明确的设计、验收标准、实现记录和下一步行动。
 - `docs/BUGS.md`：缺陷生命周期和回归验证证据。
 - `docs/TEST_LOG.md`：只追加、不覆盖的自动化与人工验证记录。
+- `docs/DECISIONS.md`：方向性决策记录，说明范围、技术栈、交付标准等重要选择。
 - `plan-orchestrator.json`：项目专属路径、交付文件范围和豁免规则。
 
 生成到 `AGENTS.md` 和 `CLAUDE.md` 中的规则块，让 Codex 与 Claude 始终遵循同一套工作流。工具还会把仅依赖 Python 标准库的检查器安装到 `.project-plan/planctl.py`，用于本地检查和 CI 门禁。
+
+## 生成文件说明
+
+| 文件 | 作用 |
+|---|---|
+| `PLAN.md` | 项目的主计划和任务队列，记录任务 ID、状态、优先级、依赖和交付证据。 |
+| `docs/work/W-xxx.md` | 单个任务的工作记录，记录实现思路、变更内容、验证方式和后续注意事项。 |
+| `docs/BUGS.md` | 缺陷记录，追踪 bug 的状态、影响范围、修复方式和验证证据。 |
+| `docs/TEST_LOG.md` | 测试和验证记录，用来证明任务已经被实际验证，而不是只标记为完成。 |
+| `docs/DECISIONS.md` | 方向性决策记录，说明为什么选择某个方案、砍掉某个方向或确定某个交付边界。 |
+| `plan-orchestrator.json` | 项目配置文件，例如 strictness 模式。 |
+| `AGENTS.md` | 给 Codex / 通用 AI coding agent 的常驻项目规则。 |
+| `CLAUDE.md` | 给 Claude Code 的常驻项目规则。 |
+| `.project-plan/planctl.py` | 本地项目计划检查器，用于 init、adopt、check 等操作。 |
+| `.github/workflows/project-plan.yml` | GitHub Actions 工作流，用于在 CI 中执行项目计划检查。 |
 
 ## 安装 Skill
 
@@ -78,7 +94,7 @@ python .project-plan/planctl.py check --root .
 python .project-plan/planctl.py check --root . --base origin/main
 ```
 
-检查器会验证 ID、状态、依赖关系、文档链接、完成证据、Bug 关闭证据，以及交付变更是否同步更新了必要记录。
+检查器会显示当前 strictness 模式，并按对应强度验证 ID、状态、依赖关系、文档链接、完成证据、Bug 证据、决策记录，以及交付变更是否同步更新了必要记录。
 
 ## 工作方式
 

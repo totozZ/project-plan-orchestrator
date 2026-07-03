@@ -2,7 +2,7 @@
 
 ## Document contract
 
-`PLAN.md` is the sole project-level queue and status summary. Keep detailed design and implementation notes in `docs/work/`, defects in `docs/BUGS.md`, and verification attempts in `docs/TEST_LOG.md`.
+`PLAN.md` is the sole project-level queue and status summary. Keep detailed design and implementation notes in `docs/work/`, defects in `docs/BUGS.md`, verification attempts in `docs/TEST_LOG.md`, and durable project decisions in `docs/DECISIONS.md`.
 
 Use these identifiers:
 
@@ -44,15 +44,20 @@ Use work types `feature`, `bug`, `maintenance`, or `research`.
 
 ## Bug states
 
-- `Open`, `Diagnosed`, `FixedUnverified`, `Closed`, or `Deferred`.
+- `Open`, `Diagnosed`, `FixedUnverified`, `Fixed`, `Resolved`, `Closed`, or `Deferred`.
 - Use `FixedUnverified` after a fix exists but before its regression evidence passes.
-- Use `Closed` only with a linked `Passed` test record.
+- Use `Fixed`, `Resolved`, or `Closed` only with a linked `Passed` test record.
 
 ## Evidence rules
 
 Append one test record for every delivery work unit. Include the environment, revision or dirty-tree basis, command or manual procedure, result, evidence, and linked work or bug IDs.
 
 `NotRun` and `N/A` are evidence dispositions, not silent omissions. Give a reason. A manual device check is as valid as an automated test when its procedure and observation are reproducible.
+
+## Decision records
+
+Use `docs/DECISIONS.md` for choices that affect future planning or implementation: architecture, direction, scope boundaries, technology stack, delivery standards, and explicit user decisions.
+Do not use it for task lists, bug details, routine implementation notes, or test results.
 
 ## Update order
 

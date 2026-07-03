@@ -47,6 +47,15 @@ class PlanCtlTestCase(unittest.TestCase):
         )
         self.assertEqual(0, code, error)
 
+    def set_strictness(self, value: str | None) -> None:
+        path = self.root / "plan-orchestrator.json"
+        config = json.loads(path.read_text(encoding="utf-8"))
+        if value is None:
+            config.pop("strictness", None)
+        else:
+            config["strictness"] = value
+        path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
     def git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["git", "-C", str(self.root), *arguments],
@@ -75,6 +84,7 @@ class InitializationTests(PlanCtlTestCase):
             "docs/work/W-001-define-first-delivery.md",
             "docs/BUGS.md",
             "docs/TEST_LOG.md",
+            "docs/DECISIONS.md",
             "plan-orchestrator.json",
             "AGENTS.md",
             "CLAUDE.md",
@@ -140,10 +150,60 @@ class InitializationTests(PlanCtlTestCase):
         self.assertTrue(adopted.startswith(original))
         self.assertIn(planctl.PLAN_START, adopted)
         self.assertTrue((self.root / "docs" / "FEATURE_DESIGN.md").is_file())
+        self.assertTrue((self.root / "docs" / "DECISIONS.md").is_file())
         self.assertTrue(planctl.run_check(self.root).ok)
+
+    def test_adopt_apply_preserves_existing_decisions(self) -> None:
+        (self.root / "PLAN.md").write_text("# Existing project plan\n", encoding="utf-8")
+        (self.root / "docs").mkdir()
+        decisions = self.root / "docs" / "DECISIONS.md"
+        existing = "# Decisions\n\nKeep this accepted choice.\n"
+        decisions.write_text(existing, encoding="utf-8")
+
+        code, _, error = self.invoke(
+            "adopt",
+            "--root",
+            str(self.root),
+            "--apply",
+            "--agents",
+            "codex,claude",
+        )
+
+        self.assertEqual(0, code, error)
+        self.assertEqual(existing, decisions.read_text(encoding="utf-8"))
 
 
 class StructuralValidationTests(PlanCtlTestCase):
+    def test_missing_strictness_defaults_to_normal(self) -> None:
+        self.init_project()
+        self.set_strictness(None)
+
+        result = planctl.run_check(self.root)
+        code, output, error = self.invoke("check", "--root", str(self.root))
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual("normal", result.strictness)
+        self.assertEqual(0, code, error)
+        self.assertIn("Strictness: normal", output)
+
+    def test_light_done_without_evidence_warns(self) -> None:
+        self.init_project()
+        self.set_strictness("light")
+        plan = self.root / "PLAN.md"
+        text = plan.read_text(encoding="utf-8").replace(
+            "| W-001 | P0 | maintenance | Ready | NotRun |",
+            "| W-001 | P0 | maintenance | Done | NotRun |",
+        )
+        plan.write_text(text, encoding="utf-8")
+
+        result = planctl.run_check(self.root)
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertTrue(
+            any("incomplete verification evidence" in warning for warning in result.warnings),
+            result.warnings,
+        )
+
     def test_done_with_not_run_is_rejected(self) -> None:
         self.init_project()
         plan = self.root / "PLAN.md"
@@ -211,6 +271,7 @@ class StructuralValidationTests(PlanCtlTestCase):
 
     def test_closed_bug_without_passed_evidence_is_rejected(self) -> None:
         self.init_project()
+        self.set_strictness("strict")
         bugs = self.root / "docs" / "BUGS.md"
         text = bugs.read_text(encoding="utf-8").replace(
             planctl.BUG_END,
@@ -225,6 +286,46 @@ class StructuralValidationTests(PlanCtlTestCase):
         self.assertTrue(
             any("cannot be Closed" in error for error in result.errors), result.errors
         )
+
+    def test_strict_missing_bug_registry_is_rejected(self) -> None:
+        self.init_project()
+        self.set_strictness("strict")
+        (self.root / "docs" / "BUGS.md").unlink()
+
+        result = planctl.run_check(self.root)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("missing" in error and "BUGS.md" in error for error in result.errors))
+
+    def test_invalid_strictness_is_rejected(self) -> None:
+        self.init_project()
+        self.set_strictness("hard")
+
+        result = planctl.run_check(self.root)
+
+        self.assertFalse(result.ok)
+        joined = "\n".join(result.errors)
+        self.assertIn("invalid strictness", joined)
+        self.assertIn("light, normal, strict", joined)
+
+    def test_normal_missing_decisions_warns(self) -> None:
+        self.init_project()
+        (self.root / "docs" / "DECISIONS.md").unlink()
+
+        result = planctl.run_check(self.root)
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertTrue(any("DECISIONS.md" in warning for warning in result.warnings))
+
+    def test_strict_missing_decisions_is_rejected(self) -> None:
+        self.init_project()
+        self.set_strictness("strict")
+        (self.root / "docs" / "DECISIONS.md").unlink()
+
+        result = planctl.run_check(self.root)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("DECISIONS.md" in error for error in result.errors))
 
     def test_invalid_state_dependency_and_broken_link_are_rejected(self) -> None:
         self.init_project()
@@ -252,6 +353,7 @@ class StructuralValidationTests(PlanCtlTestCase):
 class GitSynchronizationTests(PlanCtlTestCase):
     def test_delivery_change_requires_plan_work_and_test_updates(self) -> None:
         self.init_project()
+        self.set_strictness("strict")
         self.initialize_git_baseline()
         source = self.root / "src" / "app.py"
         source.parent.mkdir()
@@ -281,6 +383,7 @@ class GitSynchronizationTests(PlanCtlTestCase):
 
     def test_bug_work_requires_bug_registry_update(self) -> None:
         self.init_project()
+        self.set_strictness("strict")
         plan = self.root / "PLAN.md"
         plan.write_text(
             plan.read_text(encoding="utf-8").replace(
@@ -308,6 +411,7 @@ class GitSynchronizationTests(PlanCtlTestCase):
 
     def test_exempt_document_change_does_not_require_sync(self) -> None:
         self.init_project()
+        self.set_strictness("strict")
         self.initialize_git_baseline()
         (self.root / "README.md").write_text("Typo fix.\n", encoding="utf-8")
 

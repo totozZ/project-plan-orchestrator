@@ -4,7 +4,7 @@
 
 1. Run `planctl.py adopt --root <project>` without `--apply`.
 2. Review the reported plan, status, design, bug, test, and agent-instruction candidates.
-3. Run `adopt --apply` to create missing records, append marked plan governance, install the vendored validator, and add missing agent adapters.
+3. Run `adopt --apply` to create missing records, including `docs/DECISIONS.md`, append marked plan governance, install the vendored validator, and add missing agent adapters.
 4. Map active existing design documents to work items. Prefer linking them in place over moving or duplicating them.
 5. Reconcile duplicate status summaries so `PLAN.md` becomes the project-level source of truth.
 6. Run the guard and resolve structural errors before changing delivery code.

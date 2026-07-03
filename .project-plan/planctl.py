@@ -31,7 +31,10 @@ BUG_END = "<!-- project-plan-orchestrator:bugs:end -->"
 TEST_START = "<!-- project-plan-orchestrator:tests:start -->"
 TEST_END = "<!-- project-plan-orchestrator:tests:end -->"
 INSTRUCTION_START = "<!-- project-plan-orchestrator:instructions:start -->"
+DECISIONS_PATH = "docs/DECISIONS.md"
 
+STRICTNESS_ORDER = {"light": 0, "normal": 1, "strict": 2}
+STRICTNESS_VALUES = tuple(STRICTNESS_ORDER)
 PRIORITIES = {"P0", "P1", "P2", "P3"}
 WORK_TYPES = {"feature", "bug", "maintenance", "research"}
 DELIVERY_STATES = {
@@ -45,7 +48,16 @@ DELIVERY_STATES = {
     "Cancelled",
 }
 VERIFICATION_STATES = {"NotRun", "Partial", "Passed", "Failed", "N/A"}
-BUG_STATES = {"Open", "Diagnosed", "FixedUnverified", "Closed", "Deferred"}
+BUG_STATES = {
+    "Open",
+    "Diagnosed",
+    "FixedUnverified",
+    "Fixed",
+    "Resolved",
+    "Closed",
+    "Deferred",
+}
+VERIFIED_BUG_STATES = {"Fixed", "Resolved", "Closed"}
 TEST_RESULTS = {"Passed", "Failed", "Blocked", "NotRun", "N/A"}
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -60,6 +72,8 @@ class PlanCtlError(RuntimeError):
 class CheckResult:
     errors: list[str]
     notices: list[str]
+    warnings: list[str]
+    strictness: str = "normal"
 
     @property
     def ok(self) -> bool:
@@ -166,6 +180,7 @@ def _install_common(
     _write_new(root / "plan-orchestrator.json", config, actions)
     _write_new(root / "docs" / "BUGS.md", _template("BUGS.md"), actions)
     _write_new(root / "docs" / "TEST_LOG.md", _template("TEST_LOG.md"), actions)
+    _write_new(root / DECISIONS_PATH, _template("DECISIONS.md"), actions)
 
     plan_path = root / "PLAN.md"
     managed = plan_path.is_file() and PLAN_START in _read(plan_path)
@@ -329,6 +344,19 @@ def _load_config(root: Path, errors: list[str]) -> dict:
     return config
 
 
+def _strictness(config: dict, errors: list[str]) -> str:
+    raw = config.get("strictness", "normal")
+    if not isinstance(raw, str) or raw not in STRICTNESS_ORDER:
+        expected = ", ".join(STRICTNESS_VALUES)
+        errors.append(f"invalid strictness {raw!r}; expected one of: {expected}")
+        return str(raw)
+    return raw
+
+
+def _at_least(strictness: str, level: str) -> bool:
+    return STRICTNESS_ORDER.get(strictness, STRICTNESS_ORDER["normal"]) >= STRICTNESS_ORDER[level]
+
+
 def _table_rows(
     text: str,
     start: str,
@@ -469,11 +497,19 @@ def _unchecked_acceptance(path: Path) -> bool:
     return bool(match and re.search(r"^- \[ \]", match.group(1), re.MULTILINE))
 
 
+def _has_block_reason(path: Path) -> bool:
+    text = _read(path)
+    match = re.search(r"(?im)^\s*(?:- )?Block reason:\s*(.+?)\s*$", text)
+    return bool(match and match.group(1).strip() not in {"", "—", "-", "None", "TBD"})
+
+
 def _parse_plan(
     root: Path,
     config: dict,
     tests: dict[str, str],
+    strictness: str,
     errors: list[str],
+    warnings: list[str],
 ) -> tuple[list[dict[str, str]], str | None, list[Path]]:
     plan_path = root / config.get("plan_path", "PLAN.md")
     if not plan_path.is_file():
@@ -503,8 +539,9 @@ def _parse_plan(
     if not current:
         errors.append("PLAN.md is missing a valid Current work unit")
 
-    documents = _work_documents(root, config)
-    document_ids = _work_ids_from_documents(documents, root, errors)
+    require_work_docs = _at_least(strictness, "normal")
+    documents = _work_documents(root, config) if require_work_docs else []
+    document_ids = _work_ids_from_documents(documents, root, errors) if require_work_docs else {}
     by_id: dict[str, dict[str, str]] = {}
     for row in rows:
         work_id = row["ID"]
@@ -525,32 +562,50 @@ def _parse_plan(
 
         detail_target = _extract_link(row["Detail"])
         detail_path: Path | None = None
-        if not detail_target:
-            errors.append(f"{work_id} is missing a detail link")
-        else:
-            detail_path = _local_target(plan_path, detail_target, root)
-            if detail_path is None or not detail_path.resolve().is_file():
-                errors.append(f"{work_id} detail link does not resolve: {detail_target}")
+        if require_work_docs:
+            if not detail_target:
+                errors.append(f"{work_id} is missing a detail link")
             else:
+                detail_path = _local_target(plan_path, detail_target, root)
+                if detail_path is None or not detail_path.resolve().is_file():
+                    errors.append(f"{work_id} detail link does not resolve: {detail_target}")
+                else:
+                    detail_path = detail_path.resolve()
+                    if document_ids.get(work_id, Path()).resolve() != detail_path:
+                        errors.append(f"{work_id} detail document does not declare the same Work ID")
+        elif detail_target:
+            detail_path = _local_target(plan_path, detail_target, root)
+            if detail_path is not None and detail_path.resolve().is_file():
                 detail_path = detail_path.resolve()
-                if document_ids.get(work_id, Path()).resolve() != detail_path:
-                    errors.append(f"{work_id} detail document does not declare the same Work ID")
 
         if row["Delivery"] == "Done":
-            if row["Verification"] not in {"Passed", "N/A"}:
-                errors.append(f"{work_id} cannot be Done with {row['Verification']} verification")
             test_ids = TEST_ID_RE.findall(row["Tests"])
-            if not test_ids:
-                errors.append(f"{work_id} Done work requires a linked test record")
+            if not _at_least(strictness, "normal"):
+                if row["Verification"] not in {"Passed", "N/A"} or not test_ids:
+                    warnings.append(f"{work_id} Done work has incomplete verification evidence")
             else:
-                result = tests.get(test_ids[0])
-                if result != row["Verification"]:
-                    errors.append(
-                        f"{work_id} verification {row['Verification']} does not match "
-                        f"{test_ids[0]} result {result or 'missing'}"
-                    )
-            if detail_path and _unchecked_acceptance(detail_path):
-                errors.append(f"{work_id} is Done with unchecked acceptance items")
+                if row["Verification"] not in {"Passed", "N/A"}:
+                    errors.append(f"{work_id} cannot be Done with {row['Verification']} verification")
+                if not test_ids:
+                    errors.append(f"{work_id} Done work requires a linked test record")
+                else:
+                    result = tests.get(test_ids[0])
+                    if result != row["Verification"]:
+                        errors.append(
+                            f"{work_id} verification {row['Verification']} does not match "
+                            f"{test_ids[0]} result {result or 'missing'}"
+                        )
+                if detail_path and _unchecked_acceptance(detail_path):
+                    errors.append(f"{work_id} is Done with unchecked acceptance items")
+
+        if (
+            _at_least(strictness, "strict")
+            and row["Delivery"] == "Blocked"
+            and row["Priority"] in {"P0", "P1"}
+            and detail_path
+            and not _has_block_reason(detail_path)
+        ):
+            errors.append(f"{work_id} P0/P1 blocked work requires a block reason")
 
     for row in rows:
         work_id = row["ID"]
@@ -607,10 +662,12 @@ def _parse_bugs(
         for work_id in work_ids:
             if work_id not in plan_ids:
                 errors.append(f"{bug_id} links unknown work item {work_id}")
-        if row["Status"] == "Closed":
+        if row["Status"] in VERIFIED_BUG_STATES:
             test_ids = TEST_ID_RE.findall(row["Verification"])
             if not test_ids or tests.get(test_ids[0]) != "Passed":
-                errors.append(f"{bug_id} cannot be Closed without a Passed test record")
+                errors.append(
+                    f"{bug_id} cannot be {row['Status']} without a Passed test record"
+                )
     return path
 
 
@@ -760,33 +817,66 @@ def _sync_checks(
     notices.append("Delivery files: " + ", ".join(delivery))
 
 
+def _check_decisions(root: Path, strictness: str, errors: list[str], warnings: list[str]) -> Path:
+    path = root / DECISIONS_PATH
+    if path.is_file() or not _at_least(strictness, "normal"):
+        return path
+    message = f"missing {DECISIONS_PATH}"
+    if _at_least(strictness, "strict"):
+        errors.append(message)
+    else:
+        warnings.append(message)
+    return path
+
+
 def run_check(root: Path, base: str | None = None, head: str | None = None) -> CheckResult:
     errors: list[str] = []
     notices: list[str] = []
+    warnings: list[str] = []
     if not root.is_dir():
-        return CheckResult([f"project root does not exist: {root}"], notices)
+        return CheckResult([f"project root does not exist: {root}"], notices, warnings)
     config = _load_config(root, errors)
     if not config:
-        return CheckResult(errors, notices)
+        return CheckResult(errors, notices, warnings)
+    strictness = _strictness(config, errors)
 
     test_path = root / config.get("test_log_path", "docs/TEST_LOG.md")
-    tests = _parse_tests(test_path, errors)
-    rows, current, work_documents = _parse_plan(root, config, tests, errors)
+    tests = _parse_tests(test_path, errors) if _at_least(strictness, "normal") else {}
+    rows, current, work_documents = _parse_plan(
+        root, config, tests, strictness, errors, warnings
+    )
     plan_ids = {row["ID"] for row in rows if re.fullmatch(r"W-\d{3,}", row["ID"])}
-    bug_path = _parse_bugs(root, config, plan_ids, tests, errors)
+    bug_path = (
+        _parse_bugs(root, config, plan_ids, tests, errors)
+        if _at_least(strictness, "strict")
+        else root / config.get("bug_log_path", "docs/BUGS.md")
+    )
+    decisions_path = _check_decisions(root, strictness, errors, warnings)
     plan_path = root / config.get("plan_path", "PLAN.md")
-    _validate_links([plan_path, test_path, bug_path, *work_documents], root, errors)
+    if _at_least(strictness, "normal"):
+        _validate_links(
+            [plan_path, test_path, bug_path, decisions_path, *work_documents],
+            root,
+            errors,
+        )
 
-    changed = _git_changed_paths(root, base, head, errors, notices)
-    _sync_checks(changed, config, rows, current, errors, notices)
-    return CheckResult(errors, notices)
+    if _at_least(strictness, "strict"):
+        changed = _git_changed_paths(root, base, head, errors, notices)
+        _sync_checks(changed, config, rows, current, errors, notices)
+    else:
+        notices.append("Change-sync checks require strict mode; skipped")
+    return CheckResult(errors, notices, warnings, strictness)
 
 
 def command_check(args: argparse.Namespace) -> int:
     root = Path(args.root).expanduser().resolve()
     result = run_check(root, args.base, args.head)
+    print("Project Plan Check")
+    print(f"Strictness: {result.strictness}")
     for notice in result.notices:
         print(f"NOTICE: {notice}")
+    for warning in result.warnings:
+        print(f"WARNING: {warning}")
     if result.ok:
         print(f"OK: project plan is valid in {root}")
         return 0

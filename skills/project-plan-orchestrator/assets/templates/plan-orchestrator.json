@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "strictness": "normal",
   "plan_path": "PLAN.md",
   "work_globs": [
     "docs/work/W-*.md"

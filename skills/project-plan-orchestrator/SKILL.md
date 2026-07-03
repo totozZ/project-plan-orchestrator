@@ -13,6 +13,7 @@ Keep the repository's living plan truthful while moving one bounded work unit fr
 - If the user names a work item, use it unless doing so conflicts with an unresolved dependency or product decision.
 - If the user says "continue", "next", or equivalent, select the first `Ready` item at the highest priority whose dependencies are `Done`.
 - If the request changes priorities, scope, public interfaces, or an accepted design, obtain the user's decision before implementation.
+- Record durable direction, architecture, scope-boundary, technology-stack, delivery-standard, or explicit user decisions in `docs/DECISIONS.md`.
 - For read-only explanation or review, inspect the plan and evidence without changing project records.
 
 Read [references/protocol.md](references/protocol.md) before changing managed project state. Read [references/adoption.md](references/adoption.md) when adding the system to an existing repository. Read [references/validation.md](references/validation.md) when configuring or diagnosing the guard.
@@ -27,10 +28,12 @@ Read [references/protocol.md](references/protocol.md) before changing managed pr
 6. Append one test record for the work unit. Use `NotRun` with a concrete reason when verification was impossible; never invent a pass.
 7. Update the work document with actual implementation notes, remaining acceptance gaps, and the next atomic action.
 8. Update `docs/BUGS.md` when the work type is `bug` or a bug was discovered, changed, fixed, or closed.
-9. Update `PLAN.md` last so its status and links summarize the resulting repository state.
-10. Run `.project-plan/planctl.py check --root .`. Resolve every error before handing off.
+9. Update `docs/DECISIONS.md` only when the work records a direction, architecture, scope-boundary, technology-stack, delivery-standard, or explicit user choice.
+10. Update `PLAN.md` last so its status and links summarize the resulting repository state.
+11. Run `.project-plan/planctl.py check --root .`. Resolve every error before handing off.
 
 Keep delivery and verification separate. `Implemented` means the change exists; `Done` requires `Passed` verification, or an explicit `N/A` verification record with rationale.
+Do not put task lists, bugs, routine implementation notes, or test results in `docs/DECISIONS.md`.
 
 ## Initialize or adopt
 

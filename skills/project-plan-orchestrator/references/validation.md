@@ -1,8 +1,18 @@
 # Plan guard validation
 
+## Strictness
+
+Configure check strength in `plan-orchestrator.json`:
+
+- `light`: validates the managed plan queue, work IDs, states, and dependencies. Missing work docs, test logs, and Done evidence are non-fatal; incomplete Done evidence is reported as a warning.
+- `normal`: adds work-document and test-log requirements, requires Done work to link matching verification evidence, and warns when `docs/DECISIONS.md` is missing.
+- `strict`: adds required `docs/BUGS.md`, required `docs/DECISIONS.md`, verified finished-bug states, P0/P1 block reasons, and delivery-file sync checks.
+
+Missing `strictness` defaults to `normal`.
+
 ## Structural checks
 
-The guard verifies:
+Depending on strictness, the guard verifies:
 
 - Required configuration and managed documents exist.
 - Work, bug, and test IDs are unique and well formed.
@@ -10,13 +20,13 @@ The guard verifies:
 - Work-document links exist and identify the same work item.
 - Ready or active work has only `Done` dependencies.
 - `Done` work links to a `Passed` test record, or to an `N/A` record with rationale.
-- `Closed` bugs link to a `Passed` test record.
+- `Fixed`, `Resolved`, and `Closed` bugs link to a `Passed` test record in strict mode.
 - Managed local Markdown links resolve.
 - Completed work has no unchecked acceptance item.
 
 ## Change-sync checks
 
-When Git changes match `delivery_globs` and do not match `exempt_globs`, the same diff must also contain:
+In strict mode, when Git changes match `delivery_globs` and do not match `exempt_globs`, the same diff must also contain:
 
 - `PLAN.md`
 - At least one configured work document
