@@ -11,6 +11,7 @@
 |---|---|---|---|---|---|---|---|---|
 | W-001 | P0 | feature | Done | Passed | — | [Build the v1 repository](docs/work/W-001-build-v1.md) | [TR-20260703-001](docs/TEST_LOG.md#tr-20260703-001) | — |
 | W-002 | P1 | maintenance | Ready | NotRun | W-001 | [Pilot SoccerBot adoption](docs/work/W-002-pilot-soccerbot.md) | — | — |
+| W-003 | P1 | maintenance | Done | Passed | W-001 | [Improve bilingual README quick starts](docs/work/W-003-bilingual-readme.md) | [TR-20260703-002](docs/TEST_LOG.md#tr-20260703-002) | — |
 <!-- project-plan-orchestrator:work-items:end -->
 
 ## Next action

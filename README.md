@@ -1,8 +1,47 @@
 # Project Plan Orchestrator
 
-> Living-plan-driven project orchestration for AI agents: prioritize work and keep implementation docs, bugs, and test evidence in sync. 面向 AI Agent 的活计划项目编排 Skill：拆分并排序任务，同步实现文档、Bug 与测试记录。
+> Living-plan-driven project orchestration for AI agents: prioritize work and keep implementation docs, bugs, and test evidence in sync.
+
+English | [简体中文](README.zh-CN.md)
 
 `project-plan-orchestrator` turns a repository plan into an executable delivery contract. It gives Codex and Claude the same work queue, separates implementation from verification, and blocks delivery changes whose plan, work notes, bug state, or test evidence drift out of sync.
+
+## Quick start
+
+Requirements: Git and Python 3.11 or later. The runtime uses only the Python standard library.
+
+Clone the repository:
+
+```bash
+git clone https://github.com/totozZ/project-plan-orchestrator.git
+cd project-plan-orchestrator
+```
+
+For a new project, initialize the plan records and agent instructions, then run the installed guard:
+
+```bash
+python skills/project-plan-orchestrator/scripts/planctl.py init --root /path/to/new-project --agents codex,claude
+
+cd /path/to/new-project
+python .project-plan/planctl.py check --root .
+```
+
+For an existing project, preview the adoption first. The preview is read-only:
+
+```bash
+python skills/project-plan-orchestrator/scripts/planctl.py adopt --root /path/to/existing-project
+```
+
+Review the reported files, then apply the non-destructive adoption and verify it:
+
+```bash
+python skills/project-plan-orchestrator/scripts/planctl.py adopt --root /path/to/existing-project --apply --agents codex,claude
+
+cd /path/to/existing-project
+python .project-plan/planctl.py check --root .
+```
+
+On Windows PowerShell, replace paths such as `/path/to/existing-project` with a quoted Windows path, for example `"C:\work\my-project"`.
 
 ## What it manages
 
@@ -30,32 +69,6 @@ For Claude:
 ~/.claude/skills/project-plan-orchestrator
 ```
 
-## Initialize a new project
-
-```text
-python skills/project-plan-orchestrator/scripts/planctl.py init \
-  --root /path/to/project \
-  --agents codex,claude
-```
-
-## Adopt an existing project
-
-Preview first:
-
-```text
-python skills/project-plan-orchestrator/scripts/planctl.py adopt \
-  --root /path/to/project
-```
-
-Apply non-destructively:
-
-```text
-python skills/project-plan-orchestrator/scripts/planctl.py adopt \
-  --root /path/to/project \
-  --apply \
-  --agents codex,claude
-```
-
 Existing file contents are preserved. Adoption creates missing records and appends marked governance blocks where necessary.
 
 ## Run the guard
@@ -67,15 +80,9 @@ python .project-plan/planctl.py check --root . --base origin/main
 
 The guard validates IDs, states, dependencies, document links, completion evidence, closed-bug evidence, and whether delivery changes synchronized the required records.
 
-## 中文快速说明
-
-这个 Skill 把 `PLAN.md` 变成项目执行入口。Agent 每次只处理一个有优先级、有依赖、有验收标准的小工作单元；代码写完只能标记为 `Implemented`，具有自动测试或人工实测证据后才能进入 `Done`。
-
-初始化后，项目会获得 Codex/Claude 常驻规则、功能实现文档、Bug 表、实测日志，以及可以在本地和 GitHub Actions 中运行的强制检查器。
-
 ## Development
 
-```text
+```bash
 python -m unittest discover -s tests -v
 python skills/project-plan-orchestrator/scripts/planctl.py check --root .
 ```

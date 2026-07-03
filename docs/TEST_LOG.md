@@ -4,6 +4,16 @@ Append one record for every delivery work unit. Allowed results: `Passed`, `Fail
 
 <!-- project-plan-orchestrator:tests:start -->
 <!-- Append new test records above the end marker. -->
+## TR-20260703-002
+
+- Date: 2026-07-03
+- Environment: Windows, Python 3.14.5
+- Revision: Uncommitted bilingual README documentation update
+- Procedure: Run the full unit test suite; run the vendored project-plan guard; inspect both README quick starts against the current `init`, `adopt`, and `check` CLI help.
+- Result: Passed
+- Evidence: 16/16 automated tests passed; the repository guard passed; both language versions contain reciprocal links and matching initialization, adoption, and verification commands.
+- Links: W-003
+
 ## TR-20260703-001
 
 - Date: 2026-07-03
