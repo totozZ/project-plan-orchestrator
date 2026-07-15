@@ -154,7 +154,46 @@ class InitializationTests(PlanCtlTestCase):
         self.assertIn(planctl.PLAN_START, adopted)
         self.assertTrue((self.root / "docs" / "FEATURE_DESIGN.md").is_file())
         self.assertTrue((self.root / "docs" / "DECISIONS.md").is_file())
-        self.assertTrue(planctl.run_check(self.root).ok)
+        work = self.root / "docs" / "work" / "W-001-adopt-project-plan.md"
+        work_text = work.read_text(encoding="utf-8")
+        self.assertIn(planctl.ADOPTION_CANDIDATES_START, work_text)
+        self.assertIn("- [ ] `PLAN.md`", work_text)
+        self.assertIn("- [ ] `docs/FEATURE_DESIGN.md`", work_text)
+        result = planctl.run_check(self.root)
+        self.assertTrue(result.ok, result.errors)
+        self.assertTrue(
+            any("Project adoption is incomplete" in warning for warning in result.warnings),
+            result.warnings,
+        )
+        code, output, error = self.invoke("check", "--root", str(self.root))
+        self.assertEqual(0, code, error)
+        self.assertIn("WARNING: Project adoption is incomplete", output)
+
+    def test_adopt_apply_backfills_missing_inventory_without_duplication(self) -> None:
+        (self.root / "PLAN.md").write_text("# Existing project plan\n", encoding="utf-8")
+        (self.root / "docs").mkdir()
+        (self.root / "docs" / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+        code, _, error = self.invoke("adopt", "--root", str(self.root), "--apply")
+        self.assertEqual(0, code, error)
+
+        work = self.root / "docs" / "work" / "W-001-adopt-project-plan.md"
+        text = work.read_text(encoding="utf-8")
+        text = text.split(planctl.ADOPTION_CANDIDATES_START, 1)[0].rstrip() + "\n"
+        work.write_text(text, encoding="utf-8")
+
+        code, _, error = self.invoke("adopt", "--root", str(self.root), "--apply")
+        self.assertEqual(0, code, error)
+        backfilled = work.read_text(encoding="utf-8")
+        self.assertEqual(1, backfilled.count(planctl.ADOPTION_CANDIDATES_START))
+        self.assertIn("- [ ] `PLAN.md`", backfilled)
+        self.assertIn("- [ ] `docs/ROADMAP.md`", backfilled)
+
+        code, _, error = self.invoke("adopt", "--root", str(self.root), "--apply")
+        self.assertEqual(0, code, error)
+        self.assertEqual(
+            backfilled,
+            work.read_text(encoding="utf-8"),
+        )
 
     def test_adopt_apply_preserves_existing_decisions(self) -> None:
         (self.root / "PLAN.md").write_text("# Existing project plan\n", encoding="utf-8")
@@ -483,7 +522,9 @@ class DashboardTests(PlanCtlTestCase):
 
     def test_adopted_project_exposes_orchestrator_next_action(self) -> None:
         (self.root / "PLAN.md").write_text(
-            "# Existing plan\n\nPreserve this project context.\n", encoding="utf-8"
+            "# Existing plan\n\n"
+            "| 功能 | 状态 |\n|---|---|\n| Legacy feature | 完成 |\n",
+            encoding="utf-8",
         )
         code, _, error = self.invoke(
             "adopt",
@@ -499,6 +540,63 @@ class DashboardTests(PlanCtlTestCase):
 
         self.assertIn("Map active existing documents", snapshot["project"]["next_action"])
         self.assertEqual("W-001", snapshot["current"]["id"])
+        self.assertTrue(snapshot["adoption"]["incomplete"])
+        self.assertTrue(snapshot["adoption"]["inventory_persisted"])
+        self.assertEqual(1, snapshot["adoption"]["candidate_count"])
+        self.assertEqual(0, snapshot["summary"]["verified_done"])
+        self.assertEqual(0, snapshot["summary"]["percent"])
+        self.assertTrue(
+            any("not historical project progress" in item for item in snapshot["diagnostics"]),
+            snapshot["diagnostics"],
+        )
+        self.assertIn("不是项目历史完成度", planctl.DASHBOARD_JS)
+
+        plan_path = self.root / "PLAN.md"
+        plan_text = plan_path.read_text(encoding="utf-8")
+        ready_row = (
+            "| W-001 | P0 | maintenance | Ready | NotRun | — | "
+            "[Adopt the existing project plan](docs/work/W-001-adopt-project-plan.md) "
+            "| — | — |"
+        )
+        done_row = (
+            "| W-001 | P0 | maintenance | Done | Passed | — | "
+            "[Adopt the existing project plan](docs/work/W-001-adopt-project-plan.md) "
+            "| [TR-20260715-999](docs/TEST_LOG.md#tr-20260715-999) | — |"
+        )
+        self.assertIn(ready_row, plan_text)
+        plan_path.write_text(plan_text.replace(ready_row, done_row), encoding="utf-8")
+        work_path = self.root / "docs" / "work" / "W-001-adopt-project-plan.md"
+        work_path.write_text(
+            work_path.read_text(encoding="utf-8").replace("- [ ]", "- [x]"),
+            encoding="utf-8",
+        )
+        test_log = self.root / "docs" / "TEST_LOG.md"
+        test_text = test_log.read_text(encoding="utf-8")
+        record = (
+            "## TR-20260715-999\n\n"
+            "- Date: 2026-07-15\n"
+            "- Environment: automated fixture\n"
+            "- Revision: mapped legacy plan\n"
+            "- Procedure: verify the completed adoption mapping\n"
+            "- Result: Passed\n"
+            "- Evidence: legacy scope mapped to managed records\n"
+            "- Links: W-001\n\n"
+        )
+        test_log.write_text(
+            test_text.replace(planctl.TEST_END, record + planctl.TEST_END),
+            encoding="utf-8",
+        )
+
+        completed = planctl.build_dashboard_snapshot(self.root)
+        result = planctl.run_check(self.root)
+        self.assertTrue(result.ok, result.errors)
+        self.assertFalse(completed["adoption"]["incomplete"])
+        self.assertEqual(1, completed["summary"]["verified_done"])
+        self.assertEqual(100, completed["summary"]["percent"])
+        self.assertFalse(
+            any("Project adoption is incomplete" in warning for warning in result.warnings),
+            result.warnings,
+        )
 
     def test_progress_uses_verified_done_over_non_cancelled_scope(self) -> None:
         self.init_project()

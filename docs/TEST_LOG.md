@@ -4,6 +4,16 @@ Append one record for every delivery work unit. Allowed results: `Passed`, `Fail
 
 <!-- project-plan-orchestrator:tests:start -->
 <!-- Append new test records above the end marker. -->
+## TR-20260715-002
+
+- Date: 2026-07-15
+- Environment: Windows, Python 3.14.5, Node.js 18.20.8, Git 2.54.0
+- Revision: Uncommitted W-007 incomplete-adoption diagnostics implementation
+- Procedure: Compile both planctl copies; run `python -m unittest discover -s tests -v`; syntax-check the embedded Dashboard JavaScript with `node --check -`; compare SHA-256 hashes of the source and vendored planctl copies; run both source and vendored project-plan guards.
+- Result: Passed
+- Evidence: Both Python files compiled; 32/32 automated tests passed, including adoption inventory persistence, legacy-install backfill/idempotence, non-blocking guard warnings, Dashboard incomplete-adoption diagnostics, legacy completion wording remaining at 0%, and verified mapping reaching 100%; embedded JavaScript syntax passed; source and vendored planctl hashes matched; both guards passed.
+- Links: W-007, BUG-001
+
 ## TR-20260715-001
 
 - Date: 2026-07-15

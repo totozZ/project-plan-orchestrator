@@ -33,6 +33,8 @@ BUG_END = "<!-- project-plan-orchestrator:bugs:end -->"
 TEST_START = "<!-- project-plan-orchestrator:tests:start -->"
 TEST_END = "<!-- project-plan-orchestrator:tests:end -->"
 INSTRUCTION_START = "<!-- project-plan-orchestrator:instructions:start -->"
+ADOPTION_CANDIDATES_START = "<!-- project-plan-orchestrator:adoption-candidates:start -->"
+ADOPTION_CANDIDATES_END = "<!-- project-plan-orchestrator:adoption-candidates:end -->"
 DECISIONS_PATH = "docs/DECISIONS.md"
 
 STRICTNESS_ORDER = {"light": 0, "normal": 1, "strict": 2}
@@ -289,7 +291,10 @@ function render(data) {
   $('progress-percent').textContent = `${data.summary.percent}%`;
   $('progress-bar').value = data.summary.percent;
   $('progress-bar').textContent = `${data.summary.percent}%`;
-  $('progress-detail').textContent = `${data.summary.verified_done} / ${data.summary.scope_total} 个范围内工作项已经完成并通过验证`;
+  const progressScope = data.adoption && data.adoption.incomplete
+    ? '；接入迁移尚未完成，这不是项目历史完成度'
+    : '；只统计受管且有验证证据的工作';
+  $('progress-detail').textContent = `${data.summary.verified_done} / ${data.summary.scope_total} 个范围内工作项已经完成并通过验证${progressScope}`;
   $('next-action').textContent = data.project.next_action || '尚未记录下一步操作。';
   $('plan-updated').textContent = data.project.updated ? `计划更新：${data.project.updated}` : '';
   $('refreshed-at').textContent = `页面刷新：${new Date(data.refreshed_at).toLocaleTimeString()}`;
@@ -429,11 +434,52 @@ def _base_values(root: Path, work_id: str, adopt: bool) -> dict[str, str]:
     }
 
 
+def _render_adoption_inventory(candidates: Sequence[str]) -> str:
+    if candidates:
+        checklist = "\n".join(
+            f"- [ ] `{path.replace('`', '``')}`" for path in candidates
+        )
+    else:
+        checklist = "No legacy planning-document candidates were detected during preview."
+    return (
+        "## Adoption inventory\n\n"
+        "This is the document inventory reported before adoption files were installed. "
+        "Review each candidate and map relevant delivery scope to managed work items; "
+        "a checked item records mapping review, not historical verification.\n\n"
+        f"{ADOPTION_CANDIDATES_START}\n"
+        f"{checklist}\n"
+        f"{ADOPTION_CANDIDATES_END}"
+    )
+
+
+def _persist_adoption_inventory(
+    root: Path,
+    candidates: Sequence[str],
+    actions: list[str],
+    *,
+    document: Path | None = None,
+) -> bool:
+    if document is None:
+        adoption_documents = sorted(
+            (root / "docs" / "work").glob("W-*-adopt-project-plan.md")
+        )
+        if not adoption_documents:
+            return False
+        document = adoption_documents[0]
+    return _append_block(
+        document,
+        _render_adoption_inventory(candidates),
+        ADOPTION_CANDIDATES_START,
+        actions,
+    )
+
+
 def _install_common(
     root: Path,
     agents: Sequence[str],
     *,
     adopt: bool,
+    adoption_candidates: Sequence[str] = (),
     actions: list[str],
 ) -> None:
     config = _render(_template("plan-orchestrator.json"), {})
@@ -445,6 +491,7 @@ def _install_common(
     plan_path = root / "PLAN.md"
     managed = plan_path.is_file() and PLAN_START in _read(plan_path)
     work_id: str | None = None
+    adoption_document: Path | None = None
     if not managed:
         work_id = _next_work_id(root)
         values = _base_values(root, work_id, adopt)
@@ -461,10 +508,21 @@ def _install_common(
             _write_new(plan_path, plan, actions)
 
         work_doc = _render(_template("work-item.md"), values)
-        _write_new(root / "docs" / "work" / values["WORK_FILE"], work_doc, actions)
+        work_path = root / "docs" / "work" / values["WORK_FILE"]
+        _write_new(work_path, work_doc, actions)
+        if adopt:
+            adoption_document = work_path
     else:
         actions.append(f"preserved managed plan in {plan_path}")
         (root / "docs" / "work").mkdir(parents=True, exist_ok=True)
+
+    if adopt:
+        _persist_adoption_inventory(
+            root,
+            adoption_candidates,
+            actions,
+            document=adoption_document,
+        )
 
     if "codex" in agents:
         _append_block(
@@ -541,7 +599,14 @@ def _adoption_inventory(root: Path) -> dict[str, list[str] | str | bool]:
             continue
         markdown.append(relative)
     keywords = ("plan", "status", "design", "bug", "test", "roadmap", "实施", "计划", "测试")
-    candidates = [path for path in markdown if any(key in path.lower() for key in keywords)]
+    managed_records = {"docs/bugs.md", "docs/test_log.md", DECISIONS_PATH.lower()}
+    candidates = [
+        path
+        for path in markdown
+        if any(key in path.lower() for key in keywords)
+        and path.lower() not in managed_records
+        and not re.fullmatch(r"docs/work/W-\d{3,}.*\.md", path, re.IGNORECASE)
+    ]
     return {
         "root": str(root),
         "has_plan": (root / "PLAN.md").is_file(),
@@ -567,7 +632,13 @@ def command_adopt(args: argparse.Namespace) -> int:
 
     agents = _normalize_agents(args.agents)
     actions: list[str] = []
-    _install_common(root, agents, adopt=True, actions=actions)
+    _install_common(
+        root,
+        agents,
+        adopt=True,
+        adoption_candidates=inventory["document_candidates"],
+        actions=actions,
+    )
     print("Adoption changes:")
     for action in actions:
         print(f"- {action}")
@@ -1147,6 +1218,100 @@ def _dashboard_work_title(detail: str, work_id: str) -> str:
     return plain if plain not in {"", "—", "-"} else work_id
 
 
+def _parse_adoption_candidates(text: str) -> tuple[list[dict[str, object]], bool]:
+    if ADOPTION_CANDIDATES_START not in text or ADOPTION_CANDIDATES_END not in text:
+        return [], False
+    block = text.split(ADOPTION_CANDIDATES_START, 1)[1].split(
+        ADOPTION_CANDIDATES_END, 1
+    )[0]
+    candidates: list[dict[str, object]] = []
+    for line in block.splitlines():
+        match = re.match(r"^- \[([ xX])\]\s+`(.+)`\s*$", line.strip())
+        if match:
+            candidates.append(
+                {
+                    "path": match.group(2).replace("``", "`"),
+                    "reviewed": match.group(1).lower() == "x",
+                }
+            )
+    return candidates, True
+
+
+def _adoption_status(
+    root: Path,
+    plan_path: Path,
+    rows: Sequence[dict[str, str]],
+) -> dict[str, object]:
+    status: dict[str, object] = {
+        "incomplete": False,
+        "work_id": None,
+        "inventory_persisted": False,
+        "candidate_count": 0,
+        "pending_candidate_count": 0,
+        "candidates": [],
+        "managed_work_count": len(rows),
+    }
+    for row in rows:
+        detail_target = _extract_link(row["Detail"])
+        detail_name = Path(urlparse(detail_target or "").path).name
+        title = _dashboard_work_title(row["Detail"], row["ID"])
+        if (
+            title.casefold() != "Adopt the existing project plan".casefold()
+            and not detail_name.endswith("-adopt-project-plan.md")
+        ):
+            continue
+
+        candidates: list[dict[str, object]] = []
+        inventory_persisted = False
+        if detail_target:
+            document = _local_target(plan_path, detail_target, root)
+            if document is not None:
+                resolved = document.resolve()
+                if resolved.is_relative_to(root) and resolved.is_file():
+                    try:
+                        candidates, inventory_persisted = _parse_adoption_candidates(
+                            _read(resolved)
+                        )
+                    except (OSError, UnicodeError):
+                        pass
+
+        status.update(
+            {
+                "incomplete": not (
+                    row["Delivery"] == "Done"
+                    and row["Verification"] in {"Passed", "N/A"}
+                ),
+                "work_id": row["ID"],
+                "inventory_persisted": inventory_persisted,
+                "candidate_count": len(candidates),
+                "pending_candidate_count": sum(
+                    not bool(candidate["reviewed"]) for candidate in candidates
+                ),
+                "candidates": candidates,
+            }
+        )
+        break
+    return status
+
+
+def _adoption_incomplete_message(status: dict[str, object]) -> str:
+    if status["inventory_persisted"]:
+        inventory = (
+            f"{status['candidate_count']} legacy planning-document candidate(s) "
+            f"were detected, and {status['managed_work_count']} work item(s) are managed."
+        )
+    else:
+        inventory = (
+            "The legacy document inventory is not persisted; re-run "
+            "adopt --apply to backfill the adoption work document."
+        )
+    return (
+        f"Project adoption is incomplete ({status['work_id']}). {inventory} "
+        "Dashboard progress represents managed work with verification evidence, "
+        "not historical project progress."
+    )
+
+
 def build_dashboard_snapshot(root: Path) -> dict:
     """Build a read-only, JSON-serializable view of the managed project plan."""
     root = root.expanduser().resolve()
@@ -1248,6 +1413,9 @@ def build_dashboard_snapshot(root: Path) -> dict:
     )
     scope_total = len(scope_items)
     percent = round(verified_done * 100 / scope_total) if scope_total else 0
+    adoption = _adoption_status(root, plan_path, rows)
+    if adoption["incomplete"]:
+        diagnostics.append(_adoption_incomplete_message(adoption))
 
     return {
         "api_version": 1,
@@ -1267,6 +1435,7 @@ def build_dashboard_snapshot(root: Path) -> dict:
         "counts": counts,
         "current": current,
         "work_items": items,
+        "adoption": adoption,
         "diagnostics": list(dict.fromkeys(diagnostics)),
         "refreshed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
@@ -1447,6 +1616,9 @@ def run_check(root: Path, base: str | None = None, head: str | None = None) -> C
     )
     decisions_path = _check_decisions(root, strictness, errors, warnings)
     plan_path = root / config.get("plan_path", "PLAN.md")
+    adoption = _adoption_status(root, plan_path, rows)
+    if adoption["incomplete"]:
+        warnings.append(_adoption_incomplete_message(adoption))
     if _at_least(strictness, "normal"):
         _validate_links(
             [plan_path, test_path, bug_path, decisions_path, *work_documents],

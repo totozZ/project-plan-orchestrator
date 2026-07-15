@@ -46,6 +46,7 @@ python scripts/planctl.py adopt --root <project> --apply --agents codex,claude
 ```
 
 Treat `adopt` without `--apply` as read-only. Preserve existing documentation during adoption; append only marked managed sections and create missing records.
+`adopt --apply` persists the previewed planning-document candidates in the adoption work document, but it never infers historical `Done` or `Passed` state. Treat the guard and Dashboard incomplete-adoption warning as a prompt to finish mapping and verification, even when structural validation succeeds.
 
 ## View project status
 

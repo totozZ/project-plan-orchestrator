@@ -41,6 +41,8 @@ cd /path/to/existing-project
 python .project-plan/planctl.py check --root .
 ```
 
+`adopt --apply` stores the previewed planning-document candidates as a checklist in the generated adoption work document. It intentionally does not guess work-item boundaries, historical delivery states, or verification results. Until that adoption work is verified as complete, `check` prints a non-blocking warning and the Dashboard explains that its percentage represents managed, verified migration state rather than historical project completion. Re-running `adopt --apply` can backfill the checklist for a project adopted with an older version without replacing existing content.
+
 On Windows PowerShell, replace paths such as `/path/to/existing-project` with a quoted Windows path, for example `"C:\work\my-project"`.
 
 ## What it manages
@@ -110,7 +112,7 @@ The command prints the local URL, opens it in the default browser, and keeps run
 python .project-plan/planctl.py serve --root . --port 9000 --no-browser
 ```
 
-The single-page dashboard shows the project objective, verified progress, current work, next action, status counts, and the full work queue. Search, state filtering, manual refresh, and two-second automatic refresh are built in. Progress counts work as complete only when delivery is `Done` and verification is `Passed` or justified `N/A`.
+The single-page dashboard shows the project objective, verified progress, current work, next action, status counts, and the full work queue. Search, state filtering, manual refresh, and two-second automatic refresh are built in. Progress counts work as complete only when delivery is `Done` and verification is `Passed` or justified `N/A`. For an adopted project whose migration work is not yet verified, a prominent diagnostic states that the percentage covers managed work only and is not the project's historical completion rate.
 
 The dashboard is deliberately lightweight and read-only. It uses only the Python standard library, binds only to `127.0.0.1`, serves no repository files, and rereads the managed plan for each status request. It is optional and is never started by `check` or CI; `PLAN.md` and its linked records remain the only source of truth.
 

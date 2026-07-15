@@ -41,6 +41,8 @@ cd /path/to/existing-project
 python .project-plan/planctl.py check --root .
 ```
 
+`adopt --apply` 会把预览发现的规划文档候选项保存为接入工作文档中的 checklist。它不会猜测旧文档的工作项边界、历史交付状态或验证结果。在接入工作尚未完成并通过验证前，`check` 会输出非阻断 warning，看板也会明确说明当前百分比表示“受管且有验证证据的迁移进度”，而不是项目历史完成度。对旧版本已经接入的项目重新执行 `adopt --apply`，可以非破坏地补写该清单，并保留已有内容。
+
 在 Windows PowerShell 中，请把 `/path/to/existing-project` 换成带引号的 Windows 路径，例如 `"C:\work\my-project"`。
 
 ## 管理内容
@@ -110,7 +112,7 @@ python .project-plan/planctl.py serve --root .
 python .project-plan/planctl.py serve --root . --port 9000 --no-browser
 ```
 
-单页看板会显示项目目标、已验证进度、当前任务、下一步行动、状态统计和完整工作队列，并提供搜索、状态筛选、手动刷新与每两秒自动刷新。只有交付状态为 `Done`，并且验证状态为 `Passed` 或有合理说明的 `N/A` 时，才计入已验证进度。
+单页看板会显示项目目标、已验证进度、当前任务、下一步行动、状态统计和完整工作队列，并提供搜索、状态筛选、手动刷新与每两秒自动刷新。只有交付状态为 `Done`，并且验证状态为 `Passed` 或有合理说明的 `N/A` 时，才计入已验证进度。已有项目的接入工作尚未验证完成时，看板会显示醒目诊断，说明该百分比只覆盖受管工作，并不代表项目历史完成率。
 
 看板刻意保持轻量和只读：只使用 Python 标准库，只监听 `127.0.0.1`，不提供仓库文件访问，并在每次状态请求时重新读取受管理的计划。它不会由 `check` 或 CI 自动启动；`PLAN.md` 及其关联记录仍是唯一事实来源。
 
