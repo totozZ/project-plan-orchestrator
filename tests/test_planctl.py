@@ -7,7 +7,10 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -441,6 +444,199 @@ class ConfigurationTests(PlanCtlTestCase):
                 ".github/workflows/check.yml", [".github/**"]
             )
         )
+
+
+class DashboardTests(PlanCtlTestCase):
+    def start_server(self) -> tuple[planctl.LocalDashboardServer, threading.Thread, str]:
+        server = planctl.create_dashboard_server(self.root, 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread, f"http://127.0.0.1:{server.server_address[1]}"
+
+    def stop_server(
+        self, server: planctl.LocalDashboardServer, thread: threading.Thread
+    ) -> None:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+        self.assertFalse(thread.is_alive())
+
+    def test_snapshot_exposes_project_progress_and_current_work(self) -> None:
+        self.init_project()
+
+        snapshot = planctl.build_dashboard_snapshot(self.root)
+
+        self.assertEqual(self.root.name, snapshot["project"]["name"])
+        self.assertEqual(
+            "Establish the first verified delivery slice.",
+            snapshot["project"]["objective"],
+        )
+        self.assertEqual("W-001", snapshot["project"]["current_work_unit"])
+        self.assertIn("Open the current work document", snapshot["project"]["next_action"])
+        self.assertEqual("W-001", snapshot["current"]["id"])
+        self.assertEqual(1, snapshot["summary"]["scope_total"])
+        self.assertEqual(0, snapshot["summary"]["verified_done"])
+        self.assertEqual(1, snapshot["summary"]["pending"])
+        self.assertEqual(0, snapshot["summary"]["percent"])
+        self.assertEqual([], snapshot["diagnostics"])
+        json.dumps(snapshot)
+
+    def test_adopted_project_exposes_orchestrator_next_action(self) -> None:
+        (self.root / "PLAN.md").write_text(
+            "# Existing plan\n\nPreserve this project context.\n", encoding="utf-8"
+        )
+        code, _, error = self.invoke(
+            "adopt",
+            "--root",
+            str(self.root),
+            "--apply",
+            "--agents",
+            "codex,claude",
+        )
+        self.assertEqual(0, code, error)
+
+        snapshot = planctl.build_dashboard_snapshot(self.root)
+
+        self.assertIn("Map active existing documents", snapshot["project"]["next_action"])
+        self.assertEqual("W-001", snapshot["current"]["id"])
+
+    def test_progress_uses_verified_done_over_non_cancelled_scope(self) -> None:
+        self.init_project()
+        plan = self.root / "PLAN.md"
+        text = plan.read_text(encoding="utf-8")
+        original = (
+            "| W-001 | P0 | maintenance | Ready | NotRun | — | "
+            "[Define the first delivery slice](docs/work/W-001-define-first-delivery.md) "
+            "| — | — |"
+        )
+        replacement = "\n".join(
+            [
+                original,
+                "| W-002 | P1 | feature | Done | Passed | W-001 | "
+                "[Delivered feature](docs/work/W-002.md) | TR-20260715-001 | — |",
+                "| W-003 | P2 | research | Cancelled | N/A | — | "
+                "[Cancelled idea](docs/work/W-003.md) | — | — |",
+            ]
+        )
+        plan.write_text(text.replace(original, replacement), encoding="utf-8")
+
+        snapshot = planctl.build_dashboard_snapshot(self.root)
+
+        self.assertEqual(2, snapshot["summary"]["scope_total"])
+        self.assertEqual(1, snapshot["summary"]["verified_done"])
+        self.assertEqual(1, snapshot["summary"]["pending"])
+        self.assertEqual(50, snapshot["summary"]["percent"])
+        self.assertEqual(1, snapshot["counts"]["Cancelled"])
+
+    def test_missing_records_return_recoverable_diagnostics(self) -> None:
+        snapshot = planctl.build_dashboard_snapshot(self.root)
+
+        self.assertEqual(self.root.name, snapshot["project"]["name"])
+        self.assertEqual([], snapshot["work_items"])
+        self.assertEqual(0, snapshot["summary"]["percent"])
+        joined = "\n".join(snapshot["diagnostics"])
+        self.assertIn("missing plan-orchestrator.json", joined)
+        self.assertIn("missing PLAN.md", joined)
+
+        (self.root / "plan-orchestrator.json").write_text(
+            json.dumps({"schema_version": 1, "plan_path": []}), encoding="utf-8"
+        )
+        invalid = planctl.build_dashboard_snapshot(self.root)
+        self.assertTrue(
+            any("plan_path must be" in item for item in invalid["diagnostics"]),
+            invalid["diagnostics"],
+        )
+
+        (self.root / "plan-orchestrator.json").write_text("[]\n", encoding="utf-8")
+        invalid_root = planctl.build_dashboard_snapshot(self.root)
+        self.assertTrue(
+            any("top-level value must be an object" in item for item in invalid_root["diagnostics"]),
+            invalid_root["diagnostics"],
+        )
+
+        (self.root / "plan-orchestrator.json").write_bytes(b'\xe4\xb8')
+        invalid_utf8 = planctl.build_dashboard_snapshot(self.root)
+        self.assertTrue(
+            any("invalid plan-orchestrator.json" in item for item in invalid_utf8["diagnostics"]),
+            invalid_utf8["diagnostics"],
+        )
+
+    def test_partially_written_plan_returns_diagnostics(self) -> None:
+        self.init_project()
+        (self.root / "PLAN.md").write_bytes(b'\xe4\xb8')
+
+        snapshot = planctl.build_dashboard_snapshot(self.root)
+
+        self.assertEqual([], snapshot["work_items"])
+        self.assertTrue(
+            any("cannot read PLAN.md" in item for item in snapshot["diagnostics"]),
+            snapshot["diagnostics"],
+        )
+
+    def test_http_dashboard_is_live_read_only_and_not_a_file_server(self) -> None:
+        self.init_project()
+        managed = self.root / "PLAN.md"
+        before = managed.read_text(encoding="utf-8")
+        server, thread, base_url = self.start_server()
+        try:
+            with urllib.request.urlopen(base_url + "/", timeout=3) as response:
+                html = response.read().decode("utf-8")
+                self.assertIn("Project Plan Dashboard", html)
+                self.assertEqual("no-store", response.headers["Cache-Control"])
+                self.assertIn("text/html", response.headers["Content-Type"])
+
+            with urllib.request.urlopen(base_url + "/api/status", timeout=3) as response:
+                first = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(1, first["api_version"])
+                self.assertIn("application/json", response.headers["Content-Type"])
+
+            updated = before.replace(
+                "Establish the first verified delivery slice.",
+                "Observe live project updates.",
+            )
+            managed.write_text(updated, encoding="utf-8")
+            with urllib.request.urlopen(base_url + "/api/status", timeout=3) as response:
+                second = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(
+                    "Observe live project updates.", second["project"]["objective"]
+                )
+
+            for path in ("/../../PLAN.md", "/%2e%2e/%2e%2e/PLAN.md", "/missing"):
+                with self.assertRaises(urllib.error.HTTPError) as missing:
+                    urllib.request.urlopen(base_url + path, timeout=3)
+                self.assertEqual(404, missing.exception.code)
+                missing.exception.close()
+
+            request = urllib.request.Request(
+                base_url + "/api/status", data=b"{}", method="POST"
+            )
+            with self.assertRaises(urllib.error.HTTPError) as rejected:
+                urllib.request.urlopen(request, timeout=3)
+            self.assertEqual(405, rejected.exception.code)
+            rejected.exception.close()
+            self.assertEqual(updated, managed.read_text(encoding="utf-8"))
+        finally:
+            self.stop_server(server, thread)
+
+    def test_occupied_port_is_a_user_facing_error(self) -> None:
+        self.init_project()
+        server = planctl.create_dashboard_server(self.root, 0)
+        port = int(server.server_address[1])
+        try:
+            with self.assertRaises(planctl.PlanCtlError) as raised:
+                planctl.create_dashboard_server(self.root, port)
+            self.assertIn("Choose another port", str(raised.exception))
+        finally:
+            server.server_close()
+
+    def test_init_vendors_the_serve_command(self) -> None:
+        self.init_project()
+        vendored = (self.root / ".project-plan" / "planctl.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('"serve", help="run the read-only local project dashboard"', vendored)
+        self.assertIn("DASHBOARD_HTML", vendored)
 
 
 if __name__ == "__main__":

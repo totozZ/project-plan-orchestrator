@@ -4,6 +4,16 @@ Append one record for every delivery work unit. Allowed results: `Passed`, `Fail
 
 <!-- project-plan-orchestrator:tests:start -->
 <!-- Append new test records above the end marker. -->
+## TR-20260715-001
+
+- Date: 2026-07-15
+- Environment: Windows, Python 3.14.5, Node.js 18.20.8, Git 2.54.0
+- Revision: Uncommitted W-006 lightweight local dashboard implementation
+- Procedure: Compile both planctl copies; run `python -m unittest discover -s tests -v`; syntax-check the embedded dashboard JavaScript with `node --check -`; compare SHA-256 hashes of the source and vendored planctl copies; run both project-plan guards; start the vendored dashboard on an ephemeral loopback port, request `/api/status` and `/`, then stop it with Ctrl+C.
+- Result: Passed
+- Evidence: Both Python files compiled; 31/31 automated tests passed; embedded JavaScript syntax passed; source and vendored planctl hashes matched; both guards passed; the runtime API reported Project Plan Orchestrator, W-006, 80% progress, one pending item, and zero diagnostics; the HTML route returned HTTP 200 with UTF-8 content, no-store caching, and restrictive security headers; Ctrl+C shut down cleanly.
+- Links: W-006
+
 ## TR-20260703-004
 
 - Date: 2026-07-03

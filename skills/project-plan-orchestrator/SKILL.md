@@ -47,6 +47,16 @@ python scripts/planctl.py adopt --root <project> --apply --agents codex,claude
 
 Treat `adopt` without `--apply` as read-only. Preserve existing documentation during adoption; append only marked managed sections and create missing records.
 
+## View project status
+
+The vendored CLI can run an optional, loopback-only dashboard without changing managed records:
+
+```text
+python .project-plan/planctl.py serve --root .
+```
+
+Use `--port <number>` to select another port and `--no-browser` for headless use. The dashboard is a read-only convenience view; never make it a required delivery or CI step, and continue to treat the repository records as the source of truth.
+
 ## Handle interruption or failure
 
 Before yielding after delivery edits:

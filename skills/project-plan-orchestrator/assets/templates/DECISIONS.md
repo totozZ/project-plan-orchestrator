@@ -4,7 +4,7 @@ This file records important project decisions that affect future planning and im
 
 ## Format
 
-### D-001 Decision title
+### D-NNN Decision title
 
 Date:
 Status: accepted
@@ -16,4 +16,4 @@ Reason:
 Impact:
 
 Related work:
-- W-001
+- W-NNN

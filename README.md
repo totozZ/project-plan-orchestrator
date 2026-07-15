@@ -66,7 +66,7 @@ The generated `AGENTS.md` and `CLAUDE.md` blocks keep the workflow resident for 
 | `plan-orchestrator.json` | Project configuration, including paths, globs, and the `strictness` mode. |
 | `AGENTS.md` | Persistent project rules for Codex and general AI coding agents. |
 | `CLAUDE.md` | Persistent project rules for Claude Code. |
-| `.project-plan/planctl.py` | The vendored local project-plan checker used for `init`, `adopt`, and `check`. |
+| `.project-plan/planctl.py` | The vendored local CLI used for validation and the optional read-only dashboard. |
 | `.github/workflows/project-plan.yml` | The GitHub Actions workflow that runs the project-plan check in CI. |
 
 ## Install the Skill
@@ -95,6 +95,24 @@ python .project-plan/planctl.py check --root . --base origin/main
 ```
 
 The guard displays the active strictness mode and validates the matching level of IDs, states, dependencies, document links, completion evidence, bug evidence, decision records, and delivery-change synchronization.
+
+## Local dashboard
+
+Start the optional project dashboard from an initialized or adopted repository:
+
+```bash
+python .project-plan/planctl.py serve --root .
+```
+
+The command prints the local URL, opens it in the default browser, and keeps running until you press `Ctrl+C`. If port `8765` is already in use, select another one; use `--no-browser` on a headless machine:
+
+```bash
+python .project-plan/planctl.py serve --root . --port 9000 --no-browser
+```
+
+The single-page dashboard shows the project objective, verified progress, current work, next action, status counts, and the full work queue. Search, state filtering, manual refresh, and two-second automatic refresh are built in. Progress counts work as complete only when delivery is `Done` and verification is `Passed` or justified `N/A`.
+
+The dashboard is deliberately lightweight and read-only. It uses only the Python standard library, binds only to `127.0.0.1`, serves no repository files, and rereads the managed plan for each status request. It is optional and is never started by `check` or CI; `PLAN.md` and its linked records remain the only source of truth.
 
 ## Development
 

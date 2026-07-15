@@ -66,7 +66,7 @@ python .project-plan/planctl.py check --root .
 | `plan-orchestrator.json` | 项目配置文件，例如 strictness 模式。 |
 | `AGENTS.md` | 给 Codex / 通用 AI coding agent 的常驻项目规则。 |
 | `CLAUDE.md` | 给 Claude Code 的常驻项目规则。 |
-| `.project-plan/planctl.py` | 本地项目计划检查器，用于 init、adopt、check 等操作。 |
+| `.project-plan/planctl.py` | 项目内置 CLI，用于计划检查和可选的只读本地看板。 |
 | `.github/workflows/project-plan.yml` | GitHub Actions 工作流，用于在 CI 中执行项目计划检查。 |
 
 ## 安装 Skill
@@ -95,6 +95,24 @@ python .project-plan/planctl.py check --root . --base origin/main
 ```
 
 检查器会显示当前 strictness 模式，并按对应强度验证 ID、状态、依赖关系、文档链接、完成证据、Bug 证据、决策记录，以及交付变更是否同步更新了必要记录。
+
+## 本地项目看板
+
+在已经初始化或接入的项目中启动可选看板：
+
+```bash
+python .project-plan/planctl.py serve --root .
+```
+
+命令会输出本地地址、尝试用默认浏览器打开页面，并持续运行到你按下 `Ctrl+C`。如果默认的 `8765` 端口已被占用，可以选择其他端口；在无图形界面的环境中可禁止自动打开浏览器：
+
+```bash
+python .project-plan/planctl.py serve --root . --port 9000 --no-browser
+```
+
+单页看板会显示项目目标、已验证进度、当前任务、下一步行动、状态统计和完整工作队列，并提供搜索、状态筛选、手动刷新与每两秒自动刷新。只有交付状态为 `Done`，并且验证状态为 `Passed` 或有合理说明的 `N/A` 时，才计入已验证进度。
+
+看板刻意保持轻量和只读：只使用 Python 标准库，只监听 `127.0.0.1`，不提供仓库文件访问，并在每次状态请求时重新读取受管理的计划。它不会由 `check` 或 CI 自动启动；`PLAN.md` 及其关联记录仍是唯一事实来源。
 
 ## 工作方式
 
